@@ -1,17 +1,53 @@
-from fastapi import FastAPI, HTTPException
-from models import Usuarios, Atividades, RegistroAtividades, Desafios, ParticipantesDesafios, RegrasDesafios, RegistroDesafio
+from fastapi import FastAPI, Depends, HTTPException
+from models import Usuarios, UsuarioCreate
+#from models import Usuarios, Atividades, RegistroAtividades, Desafios, ParticipantesDesafios, RegrasDesafios, RegistroDesafio
+from sqlmodel import create_engine, SQLModel, Session, select
+from typing import Annotated, List
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
-app = FastAPI()
+sqlite_file_name = "database.db"
+sqlite_url = f"sqlite:///{sqlite_file_name}"
 
+connect_args = {"check_same_thread": False}
+engine = create_engine(sqlite_url, connect_args=connect_args)
+
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+
+#gerenciamento de sessão
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 #usuários:
-@app.get("/usuarios", response_model=Usuarios)
+
+@app.get("/usuarios")
 def get_usuarios():
     pass
 
 @app.post("/usuarios", response_model=Usuarios)
-def cadastrar_usuario():
-    pass
+def cadastrar_usuario(usuario: UsuarioCreate, session: SessionDep) -> Usuarios:
+    novo_usuario = Usuarios(**usuario.model_dump(), data_criacao=datetime.now(timezone.utc))
+    session.add(novo_usuario)
+    session.commit()
+    session.refresh(novo_usuario)
+    return novo_usuario
 
+
+"""
 @app.put("/usuarios", response_model=Usuarios)
 def editar_usuario():
     pass
@@ -55,4 +91,4 @@ def editar_desafio():
 
 @app.delete("/desafios", response_model=Desafios)
 def deletar_desafio():
-    pass
+    pass"""
